@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  mra360:
+    build: .
+    container_name: mra360
+    restart: always
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+      - ./config:/app/config
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
+      - GOOGLE_CREDENTIALS_PATH=./config/drive-credentials.json
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/settings').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

@@ -1,0 +1,10 @@
+node_modules/
+.env
+config/drive-credentials.json
+uploads/videos/*
+output/*
+!uploads/videos/.gitkeep
+!output/.gitkeep
+*.log
+.DS_Store
+Thumbs.db
