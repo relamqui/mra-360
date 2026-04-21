@@ -480,7 +480,9 @@ html, body {
     background: rgba(168, 85, 247, 0.15);
     border-top: 2px solid var(--accent-primary);
     border-bottom: 2px solid var(--accent-primary);
-    pointer-events: none;
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
 }
 
 .waveform-handle {

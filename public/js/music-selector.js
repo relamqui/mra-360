@@ -1,6 +1,8 @@
 /**
  * MRA 360 — Music Selector com Waveform
  * Renderiza waveform visual com controles de início/fim touch-friendly.
+ * A janela de seleção tem SEMPRE a duração fixa do tempo de gravação.
+ * O operador pode arrastar para frente/trás mas não pode mudar o tamanho.
  */
 class MusicSelector {
     constructor() {
@@ -27,10 +29,20 @@ class MusicSelector {
         this.selectedMusicUrl = null;
         this.rawAudioData = null;
 
-        this.isDragging = null; // 'start' | 'end' | null
+        this.isDragging = null; // 'start' | 'end' | 'selection' | null
         this.canvasRect = null;
+        this.dragOffset = 0; // offset do mouse em relação ao handle durante drag
 
         this._initEvents();
+    }
+
+    /**
+     * Retorna a duração fixa da seleção como porcentagem da música total.
+     */
+    _getFixedGap() {
+        const videoDuration = window.appState ? window.appState.recordingTime : 15;
+        if (this.duration <= 0) return 1;
+        return Math.min(videoDuration / this.duration, 1);
     }
 
     _initEvents() {
@@ -58,17 +70,39 @@ class MusicSelector {
             }
         });
 
-        // Drag handles - mouse
-        this.handleStartEl.addEventListener('mousedown', (e) => { e.preventDefault(); this._startDrag('start'); });
-        this.handleEndEl.addEventListener('mousedown', (e) => { e.preventDefault(); this._startDrag('end'); });
+        // Drag handles - mouse (ambos os handles movem a seleção inteira)
+        this.handleStartEl.addEventListener('mousedown', (e) => { e.preventDefault(); this._startDrag('selection', e); });
+        this.handleEndEl.addEventListener('mousedown', (e) => { e.preventDefault(); this._startDrag('selection', e); });
+        this.selectionEl.addEventListener('mousedown', (e) => { e.preventDefault(); this._startDrag('selection', e); });
         document.addEventListener('mousemove', (e) => this._onDrag(e));
         document.addEventListener('mouseup', () => this._stopDrag());
 
-        // Drag handles - touch
-        this.handleStartEl.addEventListener('touchstart', (e) => { e.preventDefault(); this._startDrag('start'); }, { passive: false });
-        this.handleEndEl.addEventListener('touchstart', (e) => { e.preventDefault(); this._startDrag('end'); }, { passive: false });
+        // Drag handles - touch (ambos os handles movem a seleção inteira)
+        this.handleStartEl.addEventListener('touchstart', (e) => { e.preventDefault(); this._startDrag('selection', e); }, { passive: false });
+        this.handleEndEl.addEventListener('touchstart', (e) => { e.preventDefault(); this._startDrag('selection', e); }, { passive: false });
+        this.selectionEl.addEventListener('touchstart', (e) => { e.preventDefault(); this._startDrag('selection', e); }, { passive: false });
         document.addEventListener('touchmove', (e) => this._onDrag(e), { passive: false });
         document.addEventListener('touchend', () => this._stopDrag());
+
+        // Canvas click - mover seleção para o ponto clicado
+        this.canvas.addEventListener('click', (e) => {
+            if (this.isDragging) return;
+            this.canvasRect = this.canvas.getBoundingClientRect();
+            const clientX = e.clientX;
+            let clickPercent = (clientX - this.canvasRect.left) / this.canvasRect.width;
+            clickPercent = Math.max(0, Math.min(1, clickPercent));
+
+            const gap = this._getFixedGap();
+            // Centralizar a seleção no ponto clicado
+            let newStart = clickPercent - gap / 2;
+            newStart = Math.max(0, Math.min(1 - gap, newStart));
+            this.startPercent = newStart;
+            this.endPercent = newStart + gap;
+
+            this._drawWaveform();
+            this._updateHandles();
+            this._notifyChange();
+        });
 
         // Canvas resize on window resize
         window.addEventListener('resize', () => {
@@ -102,11 +136,10 @@ class MusicSelector {
             // Setup do canvas
             this._setupCanvas();
 
-            // Reset selection para a duração do vídeo selecionado
-            const videoDuration = window.appState ? window.appState.recordingTime : 15;
-            const maxEnd = Math.min(videoDuration / this.duration, 1);
+            // Reset selection para a duração fixa do vídeo
+            const gap = this._getFixedGap();
             this.startPercent = 0;
-            this.endPercent = Math.min(maxEnd, 1);
+            this.endPercent = Math.min(gap, 1);
 
             this._drawWaveform();
             this._updateHandles();
@@ -193,12 +226,18 @@ class MusicSelector {
         const endTime = this.endPercent * this.duration;
         this.timeStartEl.textContent = this._formatTime(startTime);
         this.timeEndEl.textContent = this._formatTime(endTime);
-        this.durationLabel.textContent = `Trecho: ${this._formatTime(startTime)} - ${this._formatTime(endTime)}`;
+
+        const clipDuration = endTime - startTime;
+        this.durationLabel.textContent = `Trecho: ${this._formatTime(startTime)} - ${this._formatTime(endTime)} (${Math.round(clipDuration)}s)`;
     }
 
-    _startDrag(handle) {
+    _startDrag(handle, e) {
         this.isDragging = handle;
         this.canvasRect = this.canvas.getBoundingClientRect();
+        // Calcular offset do mouse em relação ao início da seleção
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const currentStartX = this.startPercent * this.canvasRect.width + this.canvasRect.left;
+        this.dragOffset = clientX - currentStartX;
     }
 
     _onDrag(e) {
@@ -206,16 +245,16 @@ class MusicSelector {
         if (e.cancelable) e.preventDefault();
 
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        let percent = (clientX - this.canvasRect.left) / this.canvasRect.width;
-        percent = Math.max(0, Math.min(1, percent));
+        const gap = this._getFixedGap();
 
-        const minGap = 0.02; // Mínimo ~2% de diferença entre handles
+        // Mover a seleção inteira mantendo a duração fixa
+        let newStartPercent = (clientX - this.dragOffset - this.canvasRect.left) / this.canvasRect.width;
 
-        if (this.isDragging === 'start') {
-            this.startPercent = Math.min(percent, this.endPercent - minGap);
-        } else {
-            this.endPercent = Math.max(percent, this.startPercent + minGap);
-        }
+        // Clampar para não sair dos limites
+        newStartPercent = Math.max(0, Math.min(1 - gap, newStartPercent));
+
+        this.startPercent = newStartPercent;
+        this.endPercent = newStartPercent + gap;
 
         this._drawWaveform();
         this._updateHandles();
@@ -277,19 +316,24 @@ class MusicSelector {
     }
 
     /**
-     * Atualiza o endPercent quando o tempo de gravação muda.
+     * Atualiza a seleção quando o tempo de gravação muda.
+     * Mantém a posição do início e ajusta o fim para a nova duração.
      */
     updateRecordingTime(seconds) {
         if (this.duration > 0) {
-            const maxEnd = Math.min(seconds / this.duration, 1);
-            if (this.endPercent > maxEnd || this.endPercent === 1) {
-                this.endPercent = maxEnd;
-                if (this.startPercent >= this.endPercent) {
-                    this.startPercent = Math.max(0, this.endPercent - 0.02);
-                }
-                this._drawWaveform();
-                this._updateHandles();
+            const gap = Math.min(seconds / this.duration, 1);
+
+            // Manter o início, ajustar o fim
+            let newEnd = this.startPercent + gap;
+            if (newEnd > 1) {
+                // Se ultrapassou o fim, recuar o início
+                newEnd = 1;
+                this.startPercent = Math.max(0, 1 - gap);
             }
+            this.endPercent = newEnd;
+
+            this._drawWaveform();
+            this._updateHandles();
             this._notifyChange();
         }
     }
