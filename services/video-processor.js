@@ -55,10 +55,11 @@ function processVideo({ videoPath, framePath, musicPath, musicStart, musicEnd, o
             .outputOptions([
                 '-map', '[v_out]',
                 '-map', `${audioInputIndex}:a`,
-                // Codec de vídeo - Otimizado para velocidade
+                // Codec de vídeo - Equilibrado (rápido + sem travamento)
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast',     // Máxima velocidade de encoding
-                '-crf', '23',               // Qualidade padrão (boa para celular/redes sociais)
+                '-preset', 'veryfast',      // Rápido mas sem causar travamento
+                '-crf', '21',               // Boa qualidade para celular
+                '-r', '30',                 // Forçar 30fps constante (corrige VFR do navegador)
                 // Codec de áudio
                 '-c:a', 'aac',
                 '-b:a', '128k',
