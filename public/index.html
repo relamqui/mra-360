@@ -141,6 +141,41 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Seletor de Modo -->
+                <div class="control-section">
+                    <label class="control-label">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                        Modo
+                    </label>
+                    <div class="mode-selector" id="mode-selector">
+                        <button class="mode-btn active" data-mode="normal">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            Normal
+                        </button>
+                        <button class="mode-btn" data-mode="speedramp">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="13 17 18 12 13 7"></polyline>
+                                <polyline points="6 17 11 12 6 7"></polyline>
+                            </svg>
+                            Speed Ramp
+                        </button>
+                        <button class="mode-btn" data-mode="boomerang">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="17 1 21 5 17 9"></polyline>
+                                <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                                <polyline points="7 23 3 19 7 15"></polyline>
+                                <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                            </svg>
+                            Vira e Volta
+                        </button>
+                    </div>
+                    <p class="mode-description" id="mode-description">Gravação em velocidade normal.</p>
+                </div>
             </div>
 
             <!-- Botão REC -->

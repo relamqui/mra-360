@@ -264,7 +264,7 @@ app.post('/api/record', videoUpload.single('video'), async (req, res) => {
             return res.status(400).json({ error: 'Nenhum vídeo enviado.' });
         }
 
-        const { frameId, musicId, musicStart, musicEnd } = req.body;
+        const { frameId, musicId, musicStart, musicEnd, mode } = req.body;
 
         if (!musicId) {
             return res.status(400).json({ error: 'Música é obrigatória.' });
@@ -309,7 +309,8 @@ app.post('/api/record', videoUpload.single('video'), async (req, res) => {
             musicPath,
             musicStart: parseFloat(musicStart) || 0,
             musicEnd: parseFloat(musicEnd) || 30,
-            outputPath
+            outputPath,
+            mode: mode || 'normal'
         });
 
     } catch (err) {
@@ -333,7 +334,7 @@ app.get('/api/record/status/:jobId', (req, res) => {
 /**
  * Processa um job em background: FFmpeg → Drive → QR Code
  */
-async function processJob(jobId, { videoPath, framePath, musicPath, musicStart, musicEnd, outputPath }) {
+async function processJob(jobId, { videoPath, framePath, musicPath, musicStart, musicEnd, outputPath, mode }) {
     const job = jobs.get(jobId);
 
     try {
@@ -349,6 +350,7 @@ async function processJob(jobId, { videoPath, framePath, musicPath, musicStart, 
             musicStart,
             musicEnd,
             outputPath,
+            mode,
             onProgress: (percent) => {
                 job.progress = Math.round(percent * 0.6); // 0-60%
             }

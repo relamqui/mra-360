@@ -292,6 +292,55 @@ html, body {
     box-shadow: 0 0 20px var(--accent-glow);
 }
 
+/* ---- Mode Selector ---- */
+.mode-selector {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.mode-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: var(--space-sm) var(--space-xs);
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    font-family: var(--font-family);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.mode-btn:hover, .mode-btn:active {
+    background: var(--bg-glass-hover);
+    border-color: var(--border-glass-hover);
+    color: var(--text-primary);
+}
+
+.mode-btn.active {
+    background: var(--accent-gradient);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.mode-btn svg {
+    flex-shrink: 0;
+}
+
+.mode-description {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 2px;
+}
+
 /* ---- Frame Selector ---- */
 .frame-selector {
     display: flex;

@@ -12,7 +12,8 @@
         recordingTime: 15,
         selectedFrame: 'none',
         musicConfig: null,
-        currentScreen: 'setup'
+        currentScreen: 'setup',
+        selectedMode: 'normal'
     };
 
     // =============================================
@@ -77,6 +78,7 @@
 
         // Configurar eventos
         setupTimeSelector();
+        setupModeSelector();
         setupFrameSelector();
         setupRecButton();
         setupSettingsModal();
@@ -142,6 +144,52 @@
                 btn.classList.add('active');
                 window.appState.recordingTime = parseInt(btn.dataset.time);
                 musicSelector.updateRecordingTime(window.appState.recordingTime);
+            });
+        });
+    }
+
+    // =============================================
+    // Seletor de Modo
+    // =============================================
+    const modeDescriptions = {
+        normal: 'Gravação em velocidade normal.',
+        speedramp: 'Grava 15s e comprime para ~7s com aceleração gradual.',
+        boomerang: 'Grava 10s, acelera e depois reverte em câmera lenta.'
+    };
+
+    function setupModeSelector() {
+        const modeSelector = document.getElementById('mode-selector');
+        const modeDescription = document.getElementById('mode-description');
+        const modeBtns = modeSelector.querySelectorAll('.mode-btn');
+
+        modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                modeBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const mode = btn.dataset.mode;
+                window.appState.selectedMode = mode;
+
+                // Atualizar descrição
+                modeDescription.textContent = modeDescriptions[mode] || '';
+
+                // Forçar tempo de gravação para modos especiais
+                const timeBtns = document.querySelectorAll('.time-btn');
+                if (mode === 'speedramp') {
+                    // Forçar 15s
+                    timeBtns.forEach(b => b.classList.remove('active'));
+                    const btn15 = document.querySelector('.time-btn[data-time="15"]');
+                    if (btn15) btn15.classList.add('active');
+                    window.appState.recordingTime = 15;
+                    musicSelector.updateRecordingTime(15);
+                } else if (mode === 'boomerang') {
+                    // Forçar 10s
+                    timeBtns.forEach(b => b.classList.remove('active'));
+                    const btn10 = document.querySelector('.time-btn[data-time="10"]');
+                    if (btn10) btn10.classList.add('active');
+                    window.appState.recordingTime = 10;
+                    musicSelector.updateRecordingTime(10);
+                }
+                // Normal: manter o tempo que o usuário escolheu
             });
         });
     }
@@ -305,6 +353,7 @@
         formData.append('musicId', window.appState.musicConfig.musicId);
         formData.append('musicStart', window.appState.musicConfig.musicStart);
         formData.append('musicEnd', window.appState.musicConfig.musicEnd);
+        formData.append('mode', window.appState.selectedMode);
 
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();

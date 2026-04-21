@@ -132,7 +132,8 @@ async function uploadFile(filePath, parentFolderId, customName) {
         }
     });
 
-    const downloadLink = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    // webContentLink é o link direto de download (funciona melhor no Android)
+    const downloadLink = uploadResponse.data.webContentLink || `https://drive.google.com/uc?export=download&id=${fileId}`;
     const webLink = uploadResponse.data.webViewLink;
 
     console.log(`[Drive] Upload concluído. ID: ${fileId}`);
