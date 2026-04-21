@@ -55,19 +55,19 @@ function processVideo({ videoPath, framePath, musicPath, musicStart, musicEnd, o
             .outputOptions([
                 '-map', '[v_out]',
                 '-map', `${audioInputIndex}:a`,
-                // Codec de vídeo - Alta qualidade
+                // Codec de vídeo - Otimizado para velocidade
                 '-c:v', 'libx264',
-                '-preset', 'fast',          // Bom balanço entre uso temp e memória
-                '-crf', '19',               // CRF baixo para altíssima qualidade (menos pixelização)
+                '-preset', 'ultrafast',     // Máxima velocidade de encoding
+                '-crf', '23',               // Qualidade padrão (boa para celular/redes sociais)
                 // Codec de áudio
                 '-c:a', 'aac',
-                '-b:a', '192k',
+                '-b:a', '128k',
                 '-ar', '44100',
                 // Otimizações para web/celular
                 '-movflags', '+faststart',
                 '-shortest',
                 '-pix_fmt', 'yuv420p',
-                '-threads', '2'             // Evita sobrecarregar CPU/memória da VPS ou PC
+                '-threads', '0'             // Auto-detect: usa todos os cores disponíveis
             ])
             .output(outputPath)
             .on('start', (cmd) => {
