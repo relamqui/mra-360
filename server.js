@@ -296,6 +296,7 @@ app.post('/api/record', videoUpload.single('video'), async (req, res) => {
             qrCode: null,
             downloadLink: null,
             error: null,
+            outputPath: outputPath,
             createdAt: Date.now()
         });
 
@@ -328,7 +329,32 @@ app.get('/api/record/status/:jobId', (req, res) => {
     if (!job) {
         return res.status(404).json({ error: 'Job não encontrado.' });
     }
-    res.json(job);
+    // Não enviar outputPath para o cliente
+    const { outputPath, ...safeJob } = job;
+    res.json(safeJob);
+});
+
+/**
+ * GET /api/download/:jobId
+ * Serve o vídeo processado diretamente para download.
+ * Funciona em Android sem depender do Google Drive renderizar.
+ */
+app.get('/api/download/:jobId', (req, res) => {
+    const job = jobs.get(req.params.jobId);
+    if (!job) {
+        return res.status(404).json({ error: 'Vídeo não encontrado ou expirado.' });
+    }
+    if (!job.outputPath || !fs.existsSync(job.outputPath)) {
+        return res.status(404).json({ error: 'Arquivo de vídeo não disponível.' });
+    }
+
+    const filename = `MRA360_${new Date().toISOString().replace(/[:.]/g, '-')}.mp4`;
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', fs.statSync(job.outputPath).size);
+
+    const stream = fs.createReadStream(job.outputPath);
+    stream.pipe(res);
 });
 
 /**
@@ -356,43 +382,50 @@ async function processJob(jobId, { videoPath, framePath, musicPath, musicStart, 
             }
         });
 
-        // Etapa 2: Upload para Google Drive
+        // Etapa 2: Upload para Google Drive (backup)
         job.step = 'Enviando para o Drive...';
         job.progress = 60;
 
         const settings = loadSettings();
-        let downloadLink = null;
 
         if (isDriveAvailable() && settings.driveFolderId) {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const fileName = `MRA360_${timestamp}.mp4`;
-            const result = await uploadFile(outputPath, settings.driveFolderId, fileName);
-            downloadLink = result.downloadLink;
-            job.progress = 85;
+            try {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const fileName = `MRA360_${timestamp}.mp4`;
+                await uploadFile(outputPath, settings.driveFolderId, fileName);
+                job.progress = 85;
+            } catch (driveErr) {
+                console.warn('[Job] Erro no upload Drive (continuando):', driveErr.message);
+                job.progress = 85;
+            }
         } else {
             console.warn('[Job] Drive não configurado. Pulando upload.');
             job.progress = 85;
         }
 
-        // Etapa 3: Gerar QR Code
+        // Etapa 3: Gerar QR Code com link de download DIRETO do servidor
         job.step = 'Gerando QR Code...';
         job.progress = 90;
 
-        let qrCode = null;
-        if (downloadLink) {
-            qrCode = await generateQRCode(downloadLink);
-        }
+        // Usar o próprio servidor como endpoint de download (funciona instantaneamente no Android)
+        const serverDownloadUrl = `${getServerPublicUrl()}/api/download/${jobId}`;
+        const qrCode = await generateQRCode(serverDownloadUrl);
 
         // Concluído
         job.status = 'done';
         job.step = 'Concluído!';
         job.progress = 100;
         job.qrCode = qrCode;
-        job.downloadLink = downloadLink;
+        job.downloadLink = serverDownloadUrl;
 
-        // Limpar arquivos temporários
+        // Limpar apenas o vídeo raw (o output fica para download)
         cleanupFile(videoPath);
-        cleanupFile(outputPath);
+
+        // Agendar limpeza do output após 30 minutos
+        setTimeout(() => {
+            cleanupFile(outputPath);
+            console.log(`[Cleanup] Output do job ${jobId} removido após 30min.`);
+        }, 30 * 60 * 1000);
 
     } catch (err) {
         console.error(`[Job ${jobId}] Erro:`, err);
@@ -417,12 +450,26 @@ function cleanupFile(filePath) {
     }
 }
 
+/**
+ * Retorna a URL pública do servidor.
+ * No EasyPanel, usa a variável SERVER_URL ou constrói a partir do hostname.
+ */
+function getServerPublicUrl() {
+    // 1. Variável de ambiente (configurável no EasyPanel)
+    if (process.env.SERVER_URL) {
+        return process.env.SERVER_URL.replace(/\/$/, '');
+    }
+    // 2. Fallback: localhost
+    return `http://localhost:${PORT}`;
+}
+
 // Limpar jobs antigos a cada 30 minutos
 setInterval(() => {
     const now = Date.now();
     const MAX_AGE = 60 * 60 * 1000; // 1 hora
     for (const [jobId, job] of jobs) {
         if (now - job.createdAt > MAX_AGE) {
+            if (job.outputPath) cleanupFile(job.outputPath);
             jobs.delete(jobId);
         }
     }

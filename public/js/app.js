@@ -420,7 +420,7 @@
                         qrDisplay.show(job.qrCode);
                         showScreen('qrcode');
                     } else {
-                        showError('Drive Não Configurado', 'O vídeo foi processado, mas o Google Drive não está configurado. Configure nas Configurações.');
+                        showError('Erro', 'Não foi possível gerar o QR Code. Tente novamente.');
                         showScreen('setup');
                     }
                     return;
