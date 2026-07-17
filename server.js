@@ -494,7 +494,10 @@ function getLocalIPs() {
 }
 
 const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
-const USE_HTTPS = process.env.HTTPS_DEV !== 'false'; // Ativo por padrão
+// Desativa HTTPS interno quando rodando atrás de um reverse proxy (EasyPanel/Traefik)
+// que já gerencia o SSL. Ativo apenas em desenvolvimento local.
+const USE_HTTPS = process.env.HTTPS_DEV !== 'false' && !process.env.SERVER_URL;
+
 
 function startServers() {
     const localIPs = getLocalIPs();
