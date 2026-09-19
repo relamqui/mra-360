@@ -40,8 +40,6 @@
     const modalError = document.getElementById('modal-error');
     const btnCloseError = document.getElementById('btn-close-error');
     const btnNewRecording = document.getElementById('btn-new-recording');
-    const btnSaveSettings = document.getElementById('btn-save-settings');
-    const inputDriveFolder = document.getElementById('input-drive-folder');
     const inputMusicUpload = document.getElementById('input-music-upload');
     const musicUploadArea = document.getElementById('music-upload-area');
     const frameSelector = document.getElementById('frame-selector');
@@ -92,6 +90,9 @@
 
         // Atualizar estado do botão REC
         updateRecButton();
+
+        // Voltando da tela de login do Google?
+        handleDriveLoginReturn();
     }
 
     // =============================================
@@ -459,11 +460,24 @@
     // =============================================
     // Modal de Configurações
     // =============================================
+    function openSettings() {
+        modalSettings.classList.remove('hidden');
+        refreshMusicList();
+        refreshFrameList();
+        loadDriveStatus(true);
+    }
+
     function setupSettingsModal() {
-        btnSettings.addEventListener('click', () => {
-            modalSettings.classList.remove('hidden');
-            refreshMusicList();
-            refreshFrameList();
+        btnSettings.addEventListener('click', openSettings);
+
+        // Atalho do cabeçalho: abre a seção do Drive (ou vai direto ao login, se desconectado)
+        document.getElementById('btn-drive').addEventListener('click', () => {
+            if (!driveState.connected) {
+                window.location.href = '/auth/google';
+                return;
+            }
+            openSettings();
+            document.getElementById('settings-drive').scrollIntoView({ block: 'start' });
         });
 
         btnCloseSettings.addEventListener('click', () => {
@@ -475,38 +489,221 @@
             modalSettings.classList.add('hidden');
         });
 
-        btnSaveSettings.addEventListener('click', saveSettingsFromUI);
+        setupDriveBrowser();
     }
 
     async function loadSettings() {
+        await loadDriveStatus(false);
+    }
+
+    // =============================================
+    // Google Drive: conta e navegador de pastas
+    // =============================================
+    const driveState = { connected: false, account: null, folder: null };
+    const driveBrowser = {
+        path: [{ id: 'root', name: 'Meu Drive' }],
+        loadSeq: 0
+    };
+
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    async function driveApi(url, options) {
+        const res = await fetch(url, options);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            if (res.status === 401) loadDriveStatus(false);
+            throw new Error(data.error || `HTTP ${res.status}`);
+        }
+        return data;
+    }
+
+    /** Lê do servidor se há conta conectada e qual a pasta de destino. */
+    async function loadDriveStatus(openBrowser) {
         try {
-            const response = await fetch('/api/settings');
-            const settings = await response.json();
-            inputDriveFolder.value = settings.driveFolderId || '';
+            const status = await driveApi('/api/drive/status');
+            Object.assign(driveState, status);
         } catch (err) {
-            console.error('[Settings] Erro ao carregar:', err);
+            console.error('[Drive] Erro ao carregar status:', err);
+        }
+        renderDriveUI();
+        if (openBrowser && driveState.connected) setDriveRoot('root');
+    }
+
+    /** Após voltar da tela de login do Google (?drive=connected|error). */
+    function handleDriveLoginReturn() {
+        const params = new URLSearchParams(window.location.search);
+        const result = params.get('drive');
+        if (!result) return;
+        history.replaceState(null, '', window.location.pathname);
+
+        if (result === 'connected') {
+            // Já abre o navegador de pastas para escolher o destino
+            openSettings();
+            document.getElementById('settings-drive').scrollIntoView({ block: 'start' });
+        } else {
+            showError('Erro no Login do Google', params.get('msg') || 'Não foi possível conectar a conta.');
         }
     }
 
-    async function saveSettingsFromUI() {
-        try {
-            const settings = {
-                driveFolderId: inputDriveFolder.value.trim()
-            };
-            await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings)
-            });
+    function renderDriveUI() {
+        const { connected, account, folder } = driveState;
 
-            // Feedback visual
-            btnSaveSettings.textContent = '✓ Salvo!';
-            setTimeout(() => {
-                btnSaveSettings.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Salvar';
-            }, 2000);
-        } catch (err) {
-            showError('Erro', 'Não foi possível salvar as configurações.');
+        // Botão do cabeçalho
+        const btn = document.getElementById('btn-drive');
+        const label = document.getElementById('btn-drive-label');
+        btn.classList.toggle('logged', connected && !!folder);
+        btn.classList.toggle('no-folder', connected && !folder);
+        if (!connected) {
+            label.textContent = 'Entrar no Drive';
+        } else if (folder) {
+            // Mostra só a última parte do caminho ("Meu Drive / Eventos / Festa" → "Festa")
+            label.textContent = folder.name.split(' / ').pop();
+        } else {
+            label.textContent = 'Escolher pasta';
         }
+        btn.title = folder ? `Vídeos vão para: ${folder.name}` : 'Conta Google e pasta dos vídeos';
+
+        // Seção do Drive nas configurações
+        document.getElementById('google-auth-unlogged').classList.toggle('hidden', connected);
+        document.getElementById('google-auth-logged').classList.toggle('hidden', !connected);
+        if (!connected) return;
+
+        const name = (account && account.name) || 'Conta Google';
+        document.getElementById('auth-name').textContent = name;
+        document.getElementById('auth-email').textContent = (account && account.email) || '';
+        document.getElementById('auth-avatar').textContent = name.charAt(0).toUpperCase();
+
+        document.getElementById('drive-selected-folder').textContent = folder
+            ? `📁 ${folder.name}`
+            : 'Nenhuma pasta selecionada — os vídeos NÃO serão enviados ao Drive';
+    }
+
+    function renderBreadcrumb() {
+        const el = document.getElementById('drive-breadcrumb');
+        el.innerHTML = driveBrowser.path.map((p, i) =>
+            (i > 0 ? '<span class="drive-crumb-sep">›</span>' : '') +
+            `<button class="drive-crumb" data-index="${i}">${escapeHtml(p.name)}</button>`
+        ).join('');
+        el.querySelectorAll('.drive-crumb').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const index = parseInt(btn.dataset.index, 10);
+                if (index === driveBrowser.path.length - 1) return;
+                driveBrowser.path = driveBrowser.path.slice(0, index + 1);
+                loadDriveFolder();
+            });
+        });
+
+        // "Compartilhados comigo" não é uma pasta: não dá para usar nem criar nela
+        const current = driveBrowser.path[driveBrowser.path.length - 1];
+        const isSharedRoot = current.id === 'shared';
+        document.getElementById('btn-use-folder').disabled = isSharedRoot;
+        document.getElementById('btn-create-folder').disabled = isSharedRoot;
+    }
+
+    async function loadDriveFolder() {
+        const listEl = document.getElementById('drive-folder-list');
+        const current = driveBrowser.path[driveBrowser.path.length - 1];
+        const seq = ++driveBrowser.loadSeq;
+
+        renderBreadcrumb();
+        listEl.innerHTML = '<p class="drive-empty">Carregando pastas...</p>';
+
+        try {
+            const folders = await driveApi(`/api/drive/folders?parent=${encodeURIComponent(current.id)}`);
+            if (seq !== driveBrowser.loadSeq) return; // navegação mais recente em andamento
+
+            if (folders.length === 0) {
+                listEl.innerHTML = '<p class="drive-empty">Nenhuma subpasta aqui.</p>';
+                return;
+            }
+
+            listEl.innerHTML = folders.map(f => `
+                <button class="drive-folder-item" data-id="${escapeHtml(f.id)}" data-name="${escapeHtml(f.name)}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color:#8ab4f8;flex-shrink:0;">
+                        <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                    </svg>
+                    <span>${escapeHtml(f.name)}</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5;flex-shrink:0;">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            `).join('');
+
+            listEl.querySelectorAll('.drive-folder-item').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    driveBrowser.path.push({ id: btn.dataset.id, name: btn.dataset.name });
+                    loadDriveFolder();
+                });
+            });
+        } catch (err) {
+            if (seq !== driveBrowser.loadSeq) return;
+            console.error('[Drive] Erro ao listar pastas:', err);
+            listEl.innerHTML = `<p class="drive-empty">Erro ao carregar pastas: ${escapeHtml(err.message)}</p>`;
+        }
+    }
+
+    function setDriveRoot(rootId) {
+        document.querySelectorAll('.drive-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.root === rootId);
+        });
+        driveBrowser.path = [{ id: rootId, name: rootId === 'shared' ? 'Compartilhados comigo' : 'Meu Drive' }];
+        loadDriveFolder();
+    }
+
+    function setupDriveBrowser() {
+        document.querySelectorAll('.drive-tab').forEach(tab => {
+            tab.addEventListener('click', () => setDriveRoot(tab.dataset.root));
+        });
+
+        document.getElementById('btn-google-logout').addEventListener('click', async () => {
+            if (!confirm('Desconectar a conta do Google? Os vídeos deixarão de ir para o Drive.')) return;
+            try {
+                await driveApi('/api/drive/logout', { method: 'POST' });
+            } catch (err) {
+                showError('Erro', err.message);
+            }
+            loadDriveStatus(false);
+        });
+
+        document.getElementById('btn-use-folder').addEventListener('click', async () => {
+            const current = driveBrowser.path[driveBrowser.path.length - 1];
+            if (current.id === 'shared') return;
+            const fullName = driveBrowser.path.map(p => p.name).join(' / ');
+            try {
+                const { folder } = await driveApi('/api/drive/folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: current.id, name: fullName })
+                });
+                driveState.folder = folder;
+                renderDriveUI();
+            } catch (err) {
+                showError('Erro', 'Não foi possível salvar a pasta: ' + err.message);
+            }
+        });
+
+        document.getElementById('btn-create-folder').addEventListener('click', async () => {
+            const current = driveBrowser.path[driveBrowser.path.length - 1];
+            if (current.id === 'shared') return;
+            const name = prompt('Nome da nova pasta:', 'MRA 360');
+            if (!name || !name.trim()) return;
+            try {
+                const folder = await driveApi('/api/drive/folders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name.trim(), parent: current.id })
+                });
+                // Entra na pasta criada para o usuário confirmar com "Usar esta pasta"
+                driveBrowser.path.push({ id: folder.id, name: folder.name });
+                loadDriveFolder();
+            } catch (err) {
+                showError('Erro ao Criar Pasta', err.message);
+            }
+        });
     }
 
     // =============================================

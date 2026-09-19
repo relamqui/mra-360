@@ -1,6 +1,11 @@
 node_modules/
 .env
 config/drive-credentials.json
+# Segredos e estado do Google Drive (nunca versionar)
+config/oauth2-credentials.json
+config/tokens.json
+config/settings.json
+config/*.pem
 uploads/videos/*
 output/*
 !uploads/videos/.gitkeep

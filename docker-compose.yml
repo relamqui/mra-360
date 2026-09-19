@@ -15,7 +15,9 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
-      - GOOGLE_CREDENTIALS_PATH=./config/drive-credentials.json
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - SERVER_URL=${SERVER_URL}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/settings').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s

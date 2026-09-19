@@ -11,7 +11,11 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
 const { processVideo, getMediaDuration } = require('./services/video-processor');
-const { initDriveClient, uploadFile, isDriveAvailable } = require('./services/drive-upload');
+const crypto = require('crypto');
+const {
+    initDriveClient, uploadFile, isDriveAvailable,
+    getAuthUrl, handleAuthCallback, disconnect, listFolders, createFolder, getAccount, getFolderName
+} = require('./services/drive-upload');
 const { generateQRCode } = require('./services/qrcode-generator');
 
 // =============================================
@@ -118,6 +122,7 @@ const frameUpload = multer({
 
 const app = express();
 app.use(cors());
+app.set('trust proxy', true); // EasyPanel/Traefik: respeita X-Forwarded-Proto/Host
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -141,6 +146,135 @@ app.post('/api/settings', (req, res) => {
     const updated = { ...current, ...req.body };
     saveSettings(updated);
     res.json({ success: true, settings: updated });
+});
+
+// =============================================
+// ROTAS: Google Drive (login e pasta de destino)
+// =============================================
+
+// Estados anti-CSRF do login (valor → expiração)
+const oauthStates = new Map();
+
+function getOAuthRedirectUri(req) {
+    const base = process.env.SERVER_URL
+        ? process.env.SERVER_URL.replace(/\/$/, '')
+        : `${req.protocol}://${req.get('host')}`;
+    return `${base}/auth/google/callback`;
+}
+
+app.get('/api/drive/status', async (req, res) => {
+    const settings = loadSettings();
+    if (isDriveAvailable() && !settings.driveAccount) {
+        // Conta conectada antes desta versão: descobre e guarda o nome/e-mail
+        try {
+            settings.driveAccount = await getAccount();
+            saveSettings(settings);
+        } catch (e) {
+            console.warn('[Drive] Não foi possível obter a conta:', e.message);
+        }
+    }
+    if (isDriveAvailable() && settings.driveFolderId && !settings.driveFolderName) {
+        // Pasta definida só pelo ID (versão antiga / .env): busca o nome
+        try {
+            settings.driveFolderName = await getFolderName(settings.driveFolderId);
+            saveSettings(settings);
+        } catch (e) {
+            console.warn('[Drive] Não foi possível obter o nome da pasta:', e.message);
+        }
+    }
+    res.json({
+        connected: isDriveAvailable(),
+        account: isDriveAvailable() ? (settings.driveAccount || null) : null,
+        folder: settings.driveFolderId
+            ? { id: settings.driveFolderId, name: settings.driveFolderName || settings.driveFolderId }
+            : null
+    });
+});
+
+// Abre a tela de login do Google
+app.get('/auth/google', (req, res) => {
+    try {
+        const state = crypto.randomBytes(16).toString('hex');
+        oauthStates.set(state, Date.now() + 10 * 60 * 1000);
+        res.redirect(getAuthUrl(getOAuthRedirectUri(req), state));
+    } catch (err) {
+        console.error('[Drive] Erro ao iniciar login:', err.message);
+        res.redirect(`/?drive=error&msg=${encodeURIComponent(err.message)}`);
+    }
+});
+
+// Retorno do Google após o login
+app.get('/auth/google/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+    const expires = oauthStates.get(state);
+    oauthStates.delete(state);
+
+    if (error) {
+        return res.redirect(`/?drive=error&msg=${encodeURIComponent(error === 'access_denied' ? 'Login cancelado.' : error)}`);
+    }
+    if (!code || !expires || expires < Date.now()) {
+        return res.redirect(`/?drive=error&msg=${encodeURIComponent('Login expirado. Tente novamente.')}`);
+    }
+
+    try {
+        const account = await handleAuthCallback(code, getOAuthRedirectUri(req));
+        const settings = loadSettings();
+        const sameAccount = settings.driveAccount && settings.driveAccount.email === account.email;
+        if (!sameAccount) {
+            // A pasta escolhida pertence à conta anterior
+            delete settings.driveFolderId;
+            delete settings.driveFolderName;
+        }
+        settings.driveAccount = account;
+        saveSettings(settings);
+        console.log(`[Drive] ✅ Conta conectada: ${account.email}`);
+        res.redirect('/?drive=connected');
+    } catch (err) {
+        console.error('[Drive] Erro no retorno do login:', err.message);
+        res.redirect(`/?drive=error&msg=${encodeURIComponent('Falha ao conectar: ' + err.message)}`);
+    }
+});
+
+app.post('/api/drive/logout', async (req, res) => {
+    await disconnect();
+    const settings = loadSettings();
+    delete settings.driveAccount;
+    delete settings.driveFolderId;
+    delete settings.driveFolderName;
+    saveSettings(settings);
+    res.json({ success: true });
+});
+
+// Lista subpastas: ?parent=root | shared | <id da pasta>
+app.get('/api/drive/folders', async (req, res) => {
+    if (!isDriveAvailable()) return res.status(401).json({ error: 'Conta do Google não conectada.' });
+    try {
+        res.json(await listFolders(req.query.parent || 'root'));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/drive/folders', async (req, res) => {
+    if (!isDriveAvailable()) return res.status(401).json({ error: 'Conta do Google não conectada.' });
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Informe o nome da pasta.' });
+    try {
+        res.json(await createFolder(name, req.body.parent));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Define a pasta de destino dos vídeos
+app.post('/api/drive/folder', (req, res) => {
+    const { id, name } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'Pasta inválida.' });
+    const settings = loadSettings();
+    settings.driveFolderId = String(id);
+    settings.driveFolderName = String(name || id);
+    saveSettings(settings);
+    res.json({ success: true, folder: { id: settings.driveFolderId, name: settings.driveFolderName } });
 });
 
 // =============================================
@@ -466,6 +600,9 @@ function getServerPublicUrl() {
 // Limpar jobs antigos a cada 30 minutos
 setInterval(() => {
     const now = Date.now();
+    for (const [state, expires] of oauthStates) {
+        if (expires < now) oauthStates.delete(state);
+    }
     const MAX_AGE = 60 * 60 * 1000; // 1 hora
     for (const [jobId, job] of jobs) {
         if (now - job.createdAt > MAX_AGE) {

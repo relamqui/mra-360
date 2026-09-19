@@ -1235,3 +1235,290 @@ html, body {
 .pre-recording-countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); z-index: 50; backdrop-filter: blur(4px); }  
 .pre-recording-countdown span { font-size: 8rem; font-weight: 800; color: white; text-shadow: 0 0 20px rgba(0,0,0,0.5); animation: pulse 1s infinite alternate; }  
 @keyframes pulse { 0%% { transform: scale(1); opacity: 1; } 100%% { transform: scale(1.2); opacity: 0.8; } } 
+
+
+/* ============================================ */
+/* Google Drive: botão do cabeçalho e navegador */
+/* ============================================ */
+.setup-header .logo-text {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-sm, 8px);
+    flex: 1;
+    min-width: 0;
+    margin-left: var(--space-sm, 8px);
+}
+
+.header-actions .icon-btn {
+    flex-shrink: 0;
+}
+
+.drive-status-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    min-width: 0;
+    padding: 0 12px;
+    border-radius: var(--radius-md);
+    background: rgba(66, 133, 244, 0.18);
+    border: 1px solid rgba(66, 133, 244, 0.5);
+    color: #8ab4f8;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.drive-status-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.drive-status-btn svg {
+    flex-shrink: 0;
+}
+
+.drive-status-btn.logged {
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(168, 85, 247, 0.35);
+    color: var(--text-primary);
+}
+
+.drive-status-btn.no-folder {
+    background: rgba(255, 170, 0, 0.12);
+    border-color: rgba(255, 170, 0, 0.45);
+    color: #ffc04d;
+}
+
+.drive-selected-folder {
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    font-size: 0.8rem;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.drive-browser {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.drive-tabs {
+    display: flex;
+    gap: 6px;
+}
+
+.drive-tab {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font-family: var(--font-family);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.drive-tab.active {
+    opacity: 1;
+    border-color: var(--accent-primary);
+    background: rgba(168, 85, 247, 0.15);
+}
+
+.drive-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.75rem;
+}
+
+.drive-crumb {
+    padding: 2px 4px;
+    border: none;
+    background: none;
+    color: #8ab4f8;
+    font-family: var(--font-family);
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.drive-crumb:last-child {
+    color: inherit;
+    font-weight: 700;
+    cursor: default;
+}
+
+.drive-crumb-sep {
+    opacity: 0.5;
+}
+
+.drive-folder-list {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+}
+
+.drive-folder-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-bottom: 1px solid var(--border-glass);
+    background: transparent;
+    color: inherit;
+    font-family: var(--font-family);
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.drive-folder-item:last-child {
+    border-bottom: none;
+}
+
+.drive-folder-item:hover, .drive-folder-item:active {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.drive-folder-item span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.drive-empty {
+    padding: 12px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.drive-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.drive-actions .btn-small {
+    background: rgba(255, 255, 255, 0.08);
+    color: inherit;
+    justify-content: center;
+}
+
+.drive-use-btn {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+}
+
+.drive-use-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.btn-google-login {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+    background: #fff;
+    color: #1f1f1f;
+    border-color: #fff;
+}
+
+.google-auth-panel {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-glass);
+}
+
+.google-account-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.google-account {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.google-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #4285F4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.google-account-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.google-account-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.google-account-email {
+    font-size: 11px;
+    opacity: 0.7;
+    word-break: break-all;
+}
+
+.google-account-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-google-switch {
+    text-decoration: none;
+    color: #8ab4f8;
+    background: rgba(66, 133, 244, 0.15);
+}
+
+.btn-google-logout {
+    color: #ff6b6b;
+    background: rgba(255, 68, 68, 0.12);
+}
+
+.setting-sublabel {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-bottom: 5px;
+}
