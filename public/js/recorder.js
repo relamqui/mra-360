@@ -50,79 +50,64 @@ class VideoRecorder {
      * Pedir width:1080, height:1920 confunde o browser e causa crop/zoom.
      * Devemos pedir width >= height (landscape) e deixar o CSS rotacionar.
      * 
-     * @param {string} [deviceId] Opcional. ID específico do dispositivo.
+     * @param {string} [deviceId] ID do dispositivo, 'environment' (traseira) ou 'user' (frontal).
+     *                            Vazio = traseira.
      */
     async initCamera(deviceId) {
-        try {
-            // Se já tiver stream, desliga
-            if (this.stream) {
-                this.stream.getTracks().forEach(t => t.stop());
-                this.stream = null;
-            }
+        // Se já tiver stream, desliga e dá um tempo para o Android liberar a câmera
+        if (this.stream) {
+            this.stream.getTracks().forEach(t => t.stop());
+            this.stream = null;
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
 
-            // Construir constraints - SEMPRE em landscape (width > height)
-            // O sensor físico é landscape; o browser rotaciona automaticamente.
-            let videoConstraints = {};
+        // Pedir resolução máxima sem forçar orientação (o sensor é landscape;
+        // pedir 1080x1920 confunde o browser e causa crop/zoom)
+        const size = { width: { ideal: 1920 }, height: { ideal: 1080 } };
 
-            if (deviceId) {
-                videoConstraints.deviceId = { exact: deviceId };
-            } else {
-                videoConstraints.facingMode = 'environment';
-            }
+        // Valores especiais do seletor: 'environment' (traseira) e 'user' (frontal)
+        const facing = (deviceId === 'user' || deviceId === 'environment') ? deviceId : null;
+        const specificId = (!deviceId || facing) ? null : deviceId;
+        const wantFacing = facing || 'environment';
 
-            // Pedir resolução máxima sem forçar orientação
-            // Isso permite que o sensor entregue sua melhor resolução nativa
-            videoConstraints.width = { ideal: 1920 };
-            videoConstraints.height = { ideal: 1080 };
+        // Tentativas em ordem; se uma falhar, tenta a próxima
+        const attempts = [];
+        if (specificId) {
+            attempts.push({ deviceId: { exact: specificId }, ...size });
+            attempts.push({ deviceId: { exact: specificId } });
+        }
+        attempts.push({ facingMode: { exact: wantFacing }, ...size });
+        attempts.push({ facingMode: { exact: wantFacing } });
+        attempts.push({ facingMode: wantFacing });
+        attempts.push(true);
 
-            this.stream = await navigator.mediaDevices.getUserMedia({
-                video: videoConstraints,
-                audio: false
-            });
-
-            // Logar a resolução real obtida
-            const track = this.stream.getVideoTracks()[0];
-            const settings = track.getSettings();
-            console.log(`[Recorder] Câmera ativa: ${track.label}`);
-            console.log(`[Recorder] Resolução real: ${settings.width}x${settings.height}`);
-            console.log(`[Recorder] FacingMode: ${settings.facingMode || 'desconhecido'}`);
-
-            this.previewVideo.srcObject = this.stream;
-            await this.previewVideo.play();
-
-            // Esconder placeholder
-            const placeholder = document.getElementById('camera-placeholder');
-            if (placeholder) placeholder.classList.add('hidden');
-
-            return true;
-        } catch (err) {
-            console.error('[Recorder] Erro ao acessar câmera:', err);
-            
-            // Fallback: pedir qualquer câmera sem constraints rígidas
+        for (const video of attempts) {
             try {
-                this.stream = await navigator.mediaDevices.getUserMedia({
-                    video: deviceId ? { deviceId: { exact: deviceId } } : true,
-                    audio: false
-                });
+                this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
 
+                // Logar a câmera/resolução real obtida
                 const track = this.stream.getVideoTracks()[0];
                 const settings = track.getSettings();
-                console.log(`[Recorder] Fallback câmera: ${track.label}`);
-                console.log(`[Recorder] Fallback resolução: ${settings.width}x${settings.height}`);
+                console.log(`[Recorder] Câmera ativa: ${track.label}`);
+                console.log(`[Recorder] Resolução real: ${settings.width}x${settings.height}`);
+                console.log(`[Recorder] FacingMode: ${settings.facingMode || 'desconhecido'}`);
 
                 this.previewVideo.srcObject = this.stream;
-                this.previewVideo.style.objectFit = 'cover';
-                await this.previewVideo.play();
-                
+                await this.previewVideo.play().catch(() => {});
+
+                // Esconder placeholder
                 const placeholder = document.getElementById('camera-placeholder');
                 if (placeholder) placeholder.classList.add('hidden');
-                
+
                 return true;
-            } catch (err2) {
-                console.error('[Recorder] Fallback falhou:', err2);
-                return false;
+            } catch (err) {
+                console.warn('[Recorder] Falha ao abrir câmera com', JSON.stringify(video), '-', err.name, err.message);
+                this.lastError = err;
             }
         }
+
+        console.error('[Recorder] Nenhuma câmera pôde ser aberta:', this.lastError);
+        return false;
     }
 
     /**

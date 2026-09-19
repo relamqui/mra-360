@@ -115,23 +115,27 @@
             const deviceId = e.target.value;
             // Se a câmera já estava ativa, reinicializa com a nova
             if (recorder.stream) {
-                await recorder.initCamera(deviceId);
+                const success = await recorder.initCamera(deviceId);
+                if (!success) {
+                    showError('Câmera Indisponível', 'Não foi possível abrir esta câmera. Escolha outra na lista.');
+                }
             }
         });
 
-        // Tentar obter a lista de câmeras
+        // Opções fixas (funcionam em qualquer celular) + câmeras detectadas
+        selectEl.innerHTML = `
+            <option value="environment">📷 Câmera traseira</option>
+            <option value="user">🤳 Câmera frontal</option>
+        `;
+
         const cameras = await recorder.getCameras();
-        if (cameras.length > 0) {
-            selectEl.innerHTML = ''; // Limpar placeholder
-            cameras.forEach((cam, index) => {
-                const opt = document.createElement('option');
-                opt.value = cam.deviceId;
-                opt.text = cam.label || `Câmera ${index + 1}`;
-                selectEl.appendChild(opt);
-            });
-        } else {
-            selectEl.innerHTML = '<option value="">Câmera padrão</option>';
-        }
+        cameras.forEach((cam, index) => {
+            const opt = document.createElement('option');
+            opt.value = cam.deviceId;
+            opt.text = cam.label || `Câmera ${index + 1}`;
+            selectEl.appendChild(opt);
+        });
+        selectEl.value = 'environment';
     }
 
     // =============================================
