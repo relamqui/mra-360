@@ -397,6 +397,10 @@ app.post('/api/record', videoUpload.single('video'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'Nenhum vídeo enviado.' });
         }
+        if (req.file.size < 10 * 1024) {
+            cleanupFile(req.file.path);
+            return res.status(400).json({ error: 'O vídeo chegou vazio. Reative a câmera e grave novamente.' });
+        }
 
         const { frameId, musicId, musicStart, musicEnd, mode } = req.body;
 

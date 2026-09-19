@@ -28,7 +28,13 @@ class VideoRecorder {
      */
     async getCameras() {
         try {
-            await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); // Pedir permissão primeiro
+            // Pedir permissão primeiro (sem ela os labels vêm vazios). O stream é
+            // fechado em seguida: no celular só uma câmera pode ficar aberta, e um
+            // stream esquecido aqui deixa a câmera da gravação preta/travada.
+            if (!this.stream) {
+                const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                permissionStream.getTracks().forEach(t => t.stop());
+            }
             const devices = await navigator.mediaDevices.enumerateDevices();
             return devices.filter(d => d.kind === 'videoinput');
         } catch (err) {
@@ -120,13 +126,30 @@ class VideoRecorder {
     }
 
     /**
+     * true se a câmera está aberta e entregando imagem.
+     */
+    isStreamLive() {
+        if (!this.stream) return false;
+        const track = this.stream.getVideoTracks()[0];
+        return !!track && track.readyState === 'live' && track.enabled;
+    }
+
+    /**
+     * Extensão de arquivo correspondente ao formato gravado.
+     */
+    getFileExtension() {
+        const type = (this.mediaRecorder && this.mediaRecorder.mimeType) || '';
+        return type.includes('mp4') ? 'mp4' : 'webm';
+    }
+
+    /**
      * Inicia a gravação por `durationSeconds` segundos.
      * @param {number} durationSeconds
      * @returns {Promise<Blob>} Blob do vídeo gravado
      */
     startRecording(durationSeconds) {
         return new Promise((resolve, reject) => {
-            if (!this.stream) {
+            if (!this.isStreamLive()) {
                 reject(new Error('Câmera não inicializada.'));
                 return;
             }
@@ -169,8 +192,13 @@ class VideoRecorder {
             this.mediaRecorder.onstop = () => {
                 this.isRecording = false;
                 clearInterval(this.timerInterval);
-                const blob = new Blob(this.chunks, { type: mimeType });
-                console.log(`[Recorder] Gravação concluída. Tamanho: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+                // Usa o formato que o navegador realmente gravou (iPhone grava MP4)
+                const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType || mimeType });
+                console.log(`[Recorder] Gravação concluída. Tamanho: ${(blob.size / 1024 / 1024).toFixed(2)}MB (${blob.type})`);
+                if (blob.size < 10 * 1024) {
+                    reject(new Error('A câmera não gravou imagem (vídeo vazio). Toque na câmera para reativá-la e grave novamente.'));
+                    return;
+                }
                 resolve(blob);
             };
 

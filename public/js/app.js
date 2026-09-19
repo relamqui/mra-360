@@ -267,8 +267,8 @@
     }
 
     async function startRecordingFlow() {
-        // Garantir que a câmera está ativa
-        if (!recorder.stream) {
+        // Garantir que a câmera está ativa (reabre se o stream caiu/travou)
+        if (!recorder.isStreamLive()) {
             const selectEl = document.getElementById('camera-select');
             const deviceId = selectEl ? selectEl.value : undefined;
             const success = await recorder.initCamera(deviceId);
@@ -349,7 +349,7 @@
     // =============================================
     async function uploadVideo(blob) {
         const formData = new FormData();
-        formData.append('video', blob, 'recording.webm');
+        formData.append('video', blob, `recording.${recorder.getFileExtension()}`);
         formData.append('frameId', window.appState.selectedFrame);
         formData.append('musicId', window.appState.musicConfig.musicId);
         formData.append('musicStart', window.appState.musicConfig.musicStart);
